@@ -1,0 +1,21 @@
+name: Validate action sources
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  syntax:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell script syntax
+        run: |
+          bash -n setup-linux/scripts/setup.sh
+          bash -n setup-win32/scripts/build-sdk.sh
+          bash -n setup-win32/scripts/download-or-build.sh
+          bash -n setup-osxcross/scripts/build.sh
+      - name: Check action metadata
+        run: |
+          python3 -m pip install --user PyYAML
+          python3 -c 'import yaml; from pathlib import Path; [yaml.safe_load(p.read_text()) for p in Path(".").glob("setup-*/action.yml")]'
