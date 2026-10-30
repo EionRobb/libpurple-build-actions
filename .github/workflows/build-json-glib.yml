@@ -16,7 +16,7 @@ jobs:
       - name: Install legacy Autotools cross-build prerequisites
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends autoconf automake libtool gettext autopoint pkg-config xz-utils
+          sudo apt-get install -y --no-install-recommends autoconf automake libtool gettext autopoint pkg-config xz-utils libglib2.0-dev-bin
       - uses: ./setup-win32
       - name: Build DLL against historical Pidgin GLib SDK
         run: bash dependencies/json-glib/build-win32.sh
