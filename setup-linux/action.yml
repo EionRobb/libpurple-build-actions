@@ -1,0 +1,8 @@
+name: Setup libpurple 2 development files (Ubuntu)
+description: Extract libpurple development packages without forcing broken dpkg dependencies
+runs:
+  using: composite
+  steps:
+    - name: Prepare libpurple SDK
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/scripts/setup.sh"

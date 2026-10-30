@@ -1,0 +1,38 @@
+name: Build Win32 SDK release
+on:
+  workflow_dispatch:
+    inputs:
+      pidgin-version:
+        description: Pidgin 2 version
+        required: true
+        default: '2.14.1'
+        type: string
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare SDK
+        env:
+          PIDGIN_VERSION: ${{ inputs.pidgin-version }}
+        run: bash setup-win32/scripts/build-sdk.sh
+      - name: Package and checksum
+        env:
+          PIDGIN_VERSION: ${{ inputs.pidgin-version }}
+        run: |
+          asset="pidgin-win32-sdk-${PIDGIN_VERSION}.tar.gz"
+          tar -czf "$asset" pidgin win32-dev
+          sha256sum "$asset" > "$asset.sha256"
+      - name: Publish SDK assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PIDGIN_VERSION: ${{ inputs.pidgin-version }}
+        run: |
+          asset="pidgin-win32-sdk-${PIDGIN_VERSION}.tar.gz"
+          tag="win32-sdk-v1"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "Win32 SDK v1" --notes "Common Pidgin 2 development files for cross-compiling libpurple plugins."
+          fi
+          gh release upload "$tag" "$asset" "$asset.sha256" --clobber

@@ -1,0 +1,40 @@
+name: Setup Pidgin Win32 cross-build SDK
+description: Set up MinGW i686 and common Pidgin 2 development files, without building a plugin
+inputs:
+  pidgin-version:
+    description: Pidgin 2 version (e.g. 2.14.1 or 2.10.11)
+    required: false
+    default: '2.14.1'
+  sdk-release:
+    description: Tag containing centrally built SDK archives
+    required: false
+    default: 'win32-sdk-v1'
+runs:
+  using: composite
+  steps:
+    - name: Install MinGW C compiler
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends gcc-mingw-w64-i686-win32
+    - name: Restore SDK from repository cache
+      id: sdk-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          pidgin
+          win32-dev
+        key: pidgin-win32-sdk-${{ inputs.pidgin-version }}-common-v1
+    - name: Download or prepare SDK
+      if: steps.sdk-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        PIDGIN_VERSION: ${{ inputs.pidgin-version }}
+        SDK_RELEASE: ${{ inputs.sdk-release }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/download-or-build.sh"
+    - name: Export build environment
+      shell: bash
+      run: |
+        echo "WIN32_CC=i686-w64-mingw32-gcc" >> "$GITHUB_ENV"
+        echo "WIN32_DEV_TOP=win32-dev" >> "$GITHUB_ENV"
+        echo "PIDGIN_TREE_TOP=pidgin" >> "$GITHUB_ENV"
