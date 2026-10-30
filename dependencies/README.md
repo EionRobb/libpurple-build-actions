@@ -1,15 +1,11 @@
-# Optional json-glib dependency bundles (work in progress)
+# Optional json-glib dependency (Windows)
 
-json-glib is an optional **plugin dependency**, not a prerequisite for every libpurple plugin.
+The Pidgin 2 Windows plugins purple-teams, purple-discord and purple-googlechat use the historical `json-glib-0.14` headers and import library with the `glib-2.28.8` SDK.
 
-The intended release deliverables are:
-- macOS: `libjson-glib-1.0.a` for x86_64 and arm64, target headers, and build manifest.
-- Win32: `json-glib-1.0.dll`, its import library, and headers for i686 MinGW.
+This repository builds its own **32-bit Windows DLL** from GNOME json-glib **0.14.2** source rather than copying the binary supplied by an unrelated plugin. The upstream 0.14 series requires GLib >= 2.26.
 
-Build these separately from plugin CI, then publish checksum-verified, versioned release assets. Plugin builds should consume a pinned bundle rather than rebuilding the GLib dependency graph.
+Run the **Build legacy Win32 json-glib DLL** workflow to build and inspect a development artifact. The workflow also runs for PR changes to this dependency.
 
-**Compatibility:** A static json-glib archive still needs ABI-compatible GLib/GObject at runtime. Do not statically link a second GLib copy into a plugin. Windows DLL builds must use the GLib ABI expected by the target Pidgin installation. MacOS dynamic_lookup alone does not ensure json-glib is available to the host.
+**Current limitations:** this is not yet a tested or published release. Verify the source archive checksum, DLL imports, plugin loading against older Windows Pidgin runtimes, and runtime dependencies before distributing it. Build output is explicitly marked unverified. The existing setup-win32 action and SDK release are unchanged.
 
-The initial osxcross experiment in purple-googlechat PR #115 did not complete: GLib's `libcharset.a` was not in Mach-O format. Do not publish or consume a macOS archive until the cross-build and a real macOS load test succeed.
-
-The Win32 SDK currently includes GLib 2.28.8; build the Windows DLL against those development files rather than reusing a binary from the Facebook plugin. Keep this dependency optional in setup-win32.
+**macOS:** Keep json-glib dynamically resolved as in purple-googlechat PR #115. No macOS static json-glib archive is planned: embedding duplicate json-glib implementations across plugins introduces avoidable symbol-interposition risk.
