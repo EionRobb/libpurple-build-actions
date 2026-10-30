@@ -17,5 +17,6 @@ jobs:
           bash -n setup-osxcross/scripts/build.sh
       - name: Check action metadata
         run: |
-          python3 -m pip install --user PyYAML
-          python3 -c 'import yaml; from pathlib import Path; [yaml.safe_load(p.read_text()) for p in Path(".").glob("setup-*/action.yml")]'
+          python3 -m venv "$RUNNER_TEMP/yaml-check"
+          "$RUNNER_TEMP/yaml-check/bin/pip" install PyYAML
+          "$RUNNER_TEMP/yaml-check/bin/python" -c 'import yaml; from pathlib import Path; [yaml.safe_load(p.read_text()) for p in Path(".").glob("setup-*/action.yml")]'
