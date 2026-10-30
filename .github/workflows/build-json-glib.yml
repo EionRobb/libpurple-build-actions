@@ -1,0 +1,37 @@
+name: Build json-glib dependency bundles
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  macos:
+    name: macOS dependency preflight
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required macOS target SDK configuration
+        env:
+          SDK_URL: ${{ vars.MACOS_SDK_URL }}
+          SDK_SHA256: ${{ vars.MACOS_SDK_SHA256 }}
+        run: |
+          test -n "$SDK_URL" && test -n "$SDK_SHA256" || {
+            echo "::error::Configure MACOS_SDK_URL and MACOS_SDK_SHA256 before building macOS dependencies"
+            exit 1
+          }
+      - name: Set up osxcross
+        uses: ./setup-osxcross
+        with:
+          sdk-url: ${{ vars.MACOS_SDK_URL }}
+          sdk-sha256: ${{ vars.MACOS_SDK_SHA256 }}
+      - name: Check target GLib development SDK
+        run: |
+          echo "::error::A compatible macOS GLib target SDK must be built and supplied before json-glib can be compiled."
+          exit 1
+  win32:
+    name: Win32 dependency compatibility preflight
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./setup-win32
+      - name: Check GLib compatibility
+        run: bash dependencies/json-glib/build-win32.sh
