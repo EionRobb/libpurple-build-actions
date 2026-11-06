@@ -24,7 +24,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: /opt/osxcross
-        key: osxcross-${{ runner.os }}-${{ runner.arch }}-${{ inputs.osxcross-commit }}-${{ inputs.sdk-sha256 }}
+        key: osxcross-ubuntu24-${{ runner.arch }}-${{ inputs.osxcross-commit }}-${{ inputs.sdk-sha256 }}-v2
     - name: Build osxcross
       if: steps.toolchain.outputs.cache-hit != 'true'
       shell: bash
@@ -33,6 +33,30 @@ runs:
         SDK_SHA256: ${{ inputs.sdk-sha256 }}
         OSXCROSS_COMMIT: ${{ inputs.osxcross-commit }}
       run: bash "$GITHUB_ACTION_PATH/scripts/build.sh"
+    - name: Verify host linker dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "$(. /etc/os-release; echo "$VERSION_ID")" != "24.04" ]]; then
+          echo '::error::setup-osxcross currently requires Ubuntu 24.04 for a stable linker ABI'
+          exit 1
+        fi
+        found=0
+        for linker in /opt/osxcross/bin/*-apple-darwin*-ld; do
+          [[ -e "$linker" ]] || continue
+          found=1
+          if ! dependencies="$(ldd "$linker" 2>&1)"; then
+            printf '%s\n' "$dependencies"
+            echo "::error::Unable to inspect host libraries for $linker"
+            exit 1
+          fi
+          if grep -q 'not found' <<< "$dependencies"; then
+            printf '%s\n' "$dependencies"
+            echo "::error::Missing host libraries for $linker"
+            exit 1
+          fi
+        done
+        [[ "$found" -eq 1 ]] || { echo '::error::No osxcross linker found'; exit 1; }
     - name: Export toolchain paths
       shell: bash
       run: |
