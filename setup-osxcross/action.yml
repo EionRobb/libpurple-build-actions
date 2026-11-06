@@ -45,8 +45,13 @@ runs:
         for linker in /opt/osxcross/bin/*-apple-darwin*-ld; do
           [[ -e "$linker" ]] || continue
           found=1
-          if ldd "$linker" | grep -q 'not found'; then
-            ldd "$linker"
+          if ! dependencies="$(ldd "$linker" 2>&1)"; then
+            printf '%s\n' "$dependencies"
+            echo "::error::Unable to inspect host libraries for $linker"
+            exit 1
+          fi
+          if grep -q 'not found' <<< "$dependencies"; then
+            printf '%s\n' "$dependencies"
             echo "::error::Missing host libraries for $linker"
             exit 1
           fi
