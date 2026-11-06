@@ -24,7 +24,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: /opt/osxcross
-        key: osxcross-ubuntu24-${{ runner.arch }}-${{ inputs.osxcross-commit }}-${{ inputs.sdk-sha256 }}-v2
+        key: osxcross-llvm-ubuntu24-${{ runner.arch }}-${{ inputs.osxcross-commit }}-${{ inputs.sdk-sha256 }}-v2
     - name: Build osxcross
       if: steps.toolchain.outputs.cache-hit != 'true'
       shell: bash
@@ -42,7 +42,7 @@ runs:
           exit 1
         fi
         found=0
-        for linker in /opt/osxcross/bin/*-apple-darwin*-ld; do
+        for linker in /opt/osxcross/bin/*-apple-darwin*-clang; do
           [[ -e "$linker" ]] || continue
           found=1
           if ! dependencies="$(ldd "$linker" 2>&1)"; then
@@ -56,7 +56,8 @@ runs:
             exit 1
           fi
         done
-        [[ "$found" -eq 1 ]] || { echo '::error::No osxcross linker found'; exit 1; }
+        [[ "$found" -eq 1 ]] || { echo '::error::No osxcross compiler wrapper found'; exit 1; }
+        command -v ld64.lld >/dev/null || test -x /opt/osxcross/bin/ld64.lld || { echo '::error::LLVM Mach-O linker unavailable'; exit 1; }
     - name: Export toolchain paths
       shell: bash
       run: |
