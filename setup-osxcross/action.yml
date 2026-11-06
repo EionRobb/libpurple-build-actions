@@ -20,7 +20,7 @@ runs:
       shell: bash
       run: |
         sudo apt-get update -qq
-        sudo apt-get install -y --no-install-recommends clang cmake make patch xz-utils bzip2 cpio libxml2-dev libssl-dev zlib1g-dev liblzma-dev libbz2-dev llvm-dev uuid-dev p7zip-full pkg-config
+        sudo apt-get install -y --no-install-recommends clang cmake make patch xz-utils bzip2 cpio libxml2-dev libssl-dev zlib1g-dev liblzma-dev libbz2-dev llvm-dev lld uuid-dev p7zip-full pkg-config
     - name: Restore toolchain cache
       id: toolchain
       uses: actions/cache@v4
