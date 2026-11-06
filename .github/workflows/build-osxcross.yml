@@ -1,0 +1,58 @@
+name: Build reusable osxcross toolchain
+on:
+  workflow_dispatch:
+    inputs:
+      sdk-url:
+        description: HTTPS URL for a legally obtained macOS SDK archive
+        required: true
+        type: string
+      sdk-sha256:
+        description: SHA-256 of the SDK archive
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned toolchain
+        uses: ./setup-osxcross
+        with:
+          sdk-url: ${{ inputs.sdk-url }}
+          sdk-sha256: ${{ inputs.sdk-sha256 }}
+      - name: Smoke-test both target compilers
+        shell: bash
+        run: |
+          set -euo pipefail
+          for arch in x86_64 arm64; do
+            compiler="/opt/osxcross/bin/${arch}-apple-${DARWIN_TARGET}-clang"
+            test -x "$compiler"
+            printf 'int main(void) { return 0; }\n' | "$compiler" -x c - -o "$RUNNER_TEMP/test-${arch}"
+            file "$RUNNER_TEMP/test-${arch}"
+            file "$RUNNER_TEMP/test-${arch}" | grep -q 'Mach-O'
+          done
+      - name: Package compiler without Apple SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Never redistribute the Apple SDK from this repository.
+          # Keep the osxcross target tree layout but omit SDK directories.
+          tar -C /opt -czf "$RUNNER_TEMP/osxcross-ubuntu24-toolchain.tar.gz" \
+            --exclude='osxcross/target/SDK' \
+            --exclude='osxcross/target/SDK/**' \
+            --exclude='osxcross/SDK' \
+            --exclude='osxcross/SDK/**' \
+            osxcross
+          tar -tzf "$RUNNER_TEMP/osxcross-ubuntu24-toolchain.tar.gz" | \
+            grep -E '/MacOSX[^/]*\\.sdk/' && { echo '::error::Apple SDK present in artifact'; exit 1; } || true
+          sha256sum "$RUNNER_TEMP/osxcross-ubuntu24-toolchain.tar.gz" > "$RUNNER_TEMP/osxcross-ubuntu24-toolchain.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osxcross-ubuntu24-toolchain
+          path: |
+            ${{ runner.temp }}/osxcross-ubuntu24-toolchain.tar.gz
+            ${{ runner.temp }}/osxcross-ubuntu24-toolchain.tar.gz.sha256
+          retention-days: 30
