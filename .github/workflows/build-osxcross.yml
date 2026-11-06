@@ -45,9 +45,13 @@ jobs:
             --exclude='osxcross/target/SDK/**' \
             --exclude='osxcross/SDK' \
             --exclude='osxcross/SDK/**' \
+            --exclude='*.sdk' \
+            --exclude='*.sdk/*' \
             osxcross
-          tar -tzf "$RUNNER_TEMP/osxcross-ubuntu24-toolchain.tar.gz" | \
-            grep -E '/MacOSX[^/]*\\.sdk/' && { echo '::error::Apple SDK present in artifact'; exit 1; } || true
+          if tar -tzf "$RUNNER_TEMP/osxcross-ubuntu24-toolchain.tar.gz" | grep -E '/[^/]+\\.sdk(/|$)'; then
+            echo '::error::Apple SDK present in artifact'
+            exit 1
+          fi
           sha256sum "$RUNNER_TEMP/osxcross-ubuntu24-toolchain.tar.gz" > "$RUNNER_TEMP/osxcross-ubuntu24-toolchain.tar.gz.sha256"
       - uses: actions/upload-artifact@v4
         with:
