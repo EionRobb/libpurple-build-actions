@@ -1,12 +1,14 @@
 name: Setup osxcross
-description: Build/cache an osxcross toolchain using a caller-provided macOS SDK; does not redistribute Apple SDK files
+description: Build/cache LLVM osxcross with a pinned default SDK; callers may override SDK source and checksum
 inputs:
   sdk-url:
-    description: HTTPS URL of a legally obtained macOS SDK tar.xz
-    required: true
+    description: HTTPS URL of a macOS SDK archive (override optional; ensure you have appropriate rights)
+    required: false
+    default: 'https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz'
   sdk-sha256:
-    description: Expected SHA-256 of the SDK tar.xz
-    required: true
+    description: Expected SHA-256 of the SDK archive (override alongside sdk-url)
+    required: false
+    default: 'cd4f08a75577145b8f05245a2975f7c81401d75e9535dcffbb879ee1deefcbf4'
   osxcross-commit:
     description: Pinned upstream osxcross commit
     required: false
@@ -57,7 +59,7 @@ runs:
           fi
         done
         [[ "$found" -eq 1 ]] || { echo '::error::No osxcross compiler wrapper found'; exit 1; }
-        command -v ld64.lld >/dev/null || test -x /opt/osxcross/bin/ld64.lld || { echo '::error::LLVM Mach-O linker unavailable'; exit 1; }
+        command -v ld64.lld >/dev/null || command -v ld64.lld-18 >/dev/null || test -x /opt/osxcross/bin/ld64.lld || { echo '::error::LLVM Mach-O linker unavailable'; exit 1; }
     - name: Export toolchain paths
       shell: bash
       run: |
