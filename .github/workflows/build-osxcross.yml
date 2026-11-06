@@ -2,6 +2,10 @@ name: Build reusable osxcross toolchain
 on:
   workflow_dispatch:
     inputs:
+      release-tag:
+        description: Versioned release tag (for example osxcross-ubuntu24-v1)
+        required: true
+        type: string
       sdk-url:
         description: HTTPS URL for a legally obtained macOS SDK archive
         required: true
@@ -11,7 +15,7 @@ on:
         required: true
         type: string
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -52,7 +56,7 @@ jobs:
             echo '::error::Apple SDK present in artifact'
             exit 1
           fi
-          sha256sum "$RUNNER_TEMP/osxcross-ubuntu24-toolchain.tar.gz" > "$RUNNER_TEMP/osxcross-ubuntu24-toolchain.tar.gz.sha256"
+          (cd "$RUNNER_TEMP" && sha256sum osxcross-ubuntu24-toolchain.tar.gz > osxcross-ubuntu24-toolchain.tar.gz.sha256)
       - uses: actions/upload-artifact@v4
         with:
           name: osxcross-ubuntu24-toolchain
@@ -60,3 +64,23 @@ jobs:
             ${{ runner.temp }}/osxcross-ubuntu24-toolchain.tar.gz
             ${{ runner.temp }}/osxcross-ubuntu24-toolchain.tar.gz.sha256
           retention-days: 30
+      - name: Publish versioned toolchain release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^osxcross-ubuntu24-v[0-9]+([.][0-9]+){0,2}$ ]]; then
+            echo '::error::Release tag must look like osxcross-ubuntu24-v1 or osxcross-ubuntu24-v1.2.3'
+            exit 1
+          fi
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::Release $RELEASE_TAG already exists; choose a new version instead of overwriting"
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" \
+            "$RUNNER_TEMP/osxcross-ubuntu24-toolchain.tar.gz" \
+            "$RUNNER_TEMP/osxcross-ubuntu24-toolchain.tar.gz.sha256" \
+            --title "osxcross Ubuntu 24.04 toolchain $RELEASE_TAG" \
+            --notes "Prebuilt Linux-hosted osxcross compiler/linker for Ubuntu 24.04. Apple macOS SDK is not included and must be supplied separately. Verify the published SHA-256 checksum before use."
