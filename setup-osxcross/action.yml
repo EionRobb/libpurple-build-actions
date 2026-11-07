@@ -56,23 +56,16 @@ runs:
           echo '::error::setup-osxcross currently requires Ubuntu 24.04 for a stable linker ABI'
           exit 1
         fi
-        found=0
-        for linker in /opt/osxcross/bin/*-apple-darwin*-clang; do
-          [[ -e "$linker" ]] || continue
-          found=1
-          if ! dependencies="$(ldd "$linker" 2>&1)"; then
-            printf '%s\n' "$dependencies"
-            echo "::error::Unable to inspect host libraries for $linker"
-            exit 1
-          fi
-          if grep -q 'not found' <<< "$dependencies"; then
-            printf '%s\n' "$dependencies"
-            echo "::error::Missing host libraries for $linker"
-            exit 1
-          fi
+        # osxcross compiler commands are wrappers/symlinks, not necessarily ELF binaries.
+        # Exercise the actual compiler/linker instead of running ldd on wrappers.
+        for arch in x86_64 arm64; do
+          compiler="$(find /opt/osxcross/bin -maxdepth 1 -name "${arch}-apple-darwin*-clang" -print -quit)"
+          [[ -n "$compiler" && -x "$compiler" ]] || { echo "::error::Missing $arch compiler"; exit 1; }
+          "$compiler" --version >/dev/null
+          printf 'int main(void) { return 0; }\\n' | "$compiler" -x c - -o "$RUNNER_TEMP/osxcross-smoke-$arch"
+          file "$RUNNER_TEMP/osxcross-smoke-$arch" | grep -q 'Mach-O' || { echo "::error::Not a Mach-O binary for $arch"; exit 1; }
         done
-        [[ "$found" -eq 1 ]] || { echo '::error::No osxcross compiler wrapper found'; exit 1; }
-        command -v ld64.lld >/dev/null || command -v ld64.lld-18 >/dev/null || test -x /opt/osxcross/bin/ld64.lld || { echo '::error::LLVM Mach-O linker unavailable'; exit 1; }
+        command -v ld64.lld >/dev/null || { echo '::error::LLVM Mach-O linker unavailable'; exit 1; }
     - name: Export toolchain paths
       shell: bash
       run: |
