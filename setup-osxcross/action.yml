@@ -21,6 +21,19 @@ runs:
       run: |
         sudo apt-get update -qq
         sudo apt-get install -y --no-install-recommends clang cmake make patch xz-utils bzip2 cpio libxml2-dev libssl-dev zlib1g-dev liblzma-dev libbz2-dev llvm-dev lld uuid-dev p7zip-full pkg-config
+    - name: Expose versioned LLVM Mach-O linker
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! command -v ld64.lld >/dev/null 2>&1; then
+          linker="$(find /usr/bin /usr/lib/llvm-*/bin -maxdepth 1 -name 'ld64.lld*' -type f -print 2>/dev/null | sort -V | tail -n 1)"
+          if [[ -z "$linker" ]]; then
+            echo '::error::LLVM lld package installed but no ld64.lld executable found'
+            exit 1
+          fi
+          sudo ln -s "$linker" /usr/local/bin/ld64.lld
+        fi
+        ld64.lld --version
     - name: Restore toolchain cache
       id: toolchain
       uses: actions/cache@v4
