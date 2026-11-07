@@ -59,7 +59,12 @@ runs:
         # osxcross compiler commands are wrappers/symlinks, not necessarily ELF binaries.
         # Exercise the actual compiler/linker instead of running ldd on wrappers.
         for arch in x86_64 arm64; do
-          compiler="$(find /opt/osxcross/bin -maxdepth 1 -name "${arch}-apple-darwin*-clang" -print -quit)"
+          compiler=""
+          for candidate in /opt/osxcross/bin/"${arch}"-apple-darwin*-clang; do
+            [[ "$candidate" =~ /${arch}-apple-darwin[0-9.]+-clang$ ]] || continue
+            compiler="$candidate"
+            break
+          done
           [[ -n "$compiler" && -x "$compiler" ]] || { echo "::error::Missing $arch compiler"; exit 1; }
           "$compiler" --version >/dev/null
           printf 'int main(void) { return 0; }\n' | "$compiler" -x c - -o "$RUNNER_TEMP/osxcross-smoke-$arch"
