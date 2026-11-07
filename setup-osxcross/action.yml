@@ -1,12 +1,14 @@
 name: Setup osxcross
-description: Build/cache an osxcross toolchain using a caller-provided macOS SDK; does not redistribute Apple SDK files
+description: Build/cache LLVM osxcross with a pinned default SDK; callers may override SDK source and checksum
 inputs:
   sdk-url:
-    description: HTTPS URL of a legally obtained macOS SDK tar.xz
-    required: true
+    description: HTTPS URL of a macOS SDK archive (override optional; ensure you have appropriate rights)
+    required: false
+    default: 'https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz'
   sdk-sha256:
-    description: Expected SHA-256 of the SDK tar.xz
-    required: true
+    description: Expected SHA-256 of the SDK archive (override alongside sdk-url)
+    required: false
+    default: 'cd4f08a75577145b8f05245a2975f7c81401d75e9535dcffbb879ee1deefcbf4'
   osxcross-commit:
     description: Pinned upstream osxcross commit
     required: false
@@ -18,13 +20,26 @@ runs:
       shell: bash
       run: |
         sudo apt-get update -qq
-        sudo apt-get install -y --no-install-recommends clang cmake make patch xz-utils bzip2 cpio libxml2-dev libssl-dev zlib1g-dev liblzma-dev libbz2-dev llvm-dev uuid-dev p7zip-full pkg-config
+        sudo apt-get install -y --no-install-recommends clang cmake make patch xz-utils bzip2 cpio libxml2-dev libssl-dev zlib1g-dev liblzma-dev libbz2-dev llvm-dev lld uuid-dev p7zip-full pkg-config
+    - name: Expose versioned LLVM Mach-O linker
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! command -v ld64.lld >/dev/null 2>&1; then
+          linker="$(find /usr/bin /usr/lib/llvm-*/bin -maxdepth 1 -name 'ld64.lld*' -print 2>/dev/null | sort -V | tail -n 1)"
+          if [[ -z "$linker" ]]; then
+            echo '::error::LLVM lld package installed but no ld64.lld executable found'
+            exit 1
+          fi
+          sudo ln -s "$linker" /usr/local/bin/ld64.lld
+        fi
+        ld64.lld --version
     - name: Restore toolchain cache
       id: toolchain
       uses: actions/cache@v4
       with:
         path: /opt/osxcross
-        key: osxcross-ubuntu24-${{ runner.arch }}-${{ inputs.osxcross-commit }}-${{ inputs.sdk-sha256 }}-v2
+        key: osxcross-llvm-ubuntu24-${{ runner.arch }}-${{ inputs.osxcross-commit }}-${{ inputs.sdk-sha256 }}-v2
     - name: Build osxcross
       if: steps.toolchain.outputs.cache-hit != 'true'
       shell: bash
@@ -41,22 +56,21 @@ runs:
           echo '::error::setup-osxcross currently requires Ubuntu 24.04 for a stable linker ABI'
           exit 1
         fi
-        found=0
-        for linker in /opt/osxcross/bin/*-apple-darwin*-ld; do
-          [[ -e "$linker" ]] || continue
-          found=1
-          if ! dependencies="$(ldd "$linker" 2>&1)"; then
-            printf '%s\n' "$dependencies"
-            echo "::error::Unable to inspect host libraries for $linker"
-            exit 1
-          fi
-          if grep -q 'not found' <<< "$dependencies"; then
-            printf '%s\n' "$dependencies"
-            echo "::error::Missing host libraries for $linker"
-            exit 1
-          fi
+        # osxcross compiler commands are wrappers/symlinks, not necessarily ELF binaries.
+        # Exercise the actual compiler/linker instead of running ldd on wrappers.
+        for arch in x86_64 arm64; do
+          compiler=""
+          for candidate in /opt/osxcross/bin/"${arch}"-apple-darwin*-clang; do
+            [[ "$candidate" =~ /${arch}-apple-darwin[0-9.]+-clang$ ]] || continue
+            compiler="$candidate"
+            break
+          done
+          [[ -n "$compiler" && -x "$compiler" ]] || { echo "::error::Missing $arch compiler"; exit 1; }
+          "$compiler" --version >/dev/null
+          printf 'int main(void) { return 0; }\n' | "$compiler" -x c - -o "$RUNNER_TEMP/osxcross-smoke-$arch"
+          file "$RUNNER_TEMP/osxcross-smoke-$arch" | grep -q 'Mach-O' || { echo "::error::Not a Mach-O binary for $arch"; exit 1; }
         done
-        [[ "$found" -eq 1 ]] || { echo '::error::No osxcross linker found'; exit 1; }
+        command -v ld64.lld >/dev/null || { echo '::error::LLVM Mach-O linker unavailable'; exit 1; }
     - name: Export toolchain paths
       shell: bash
       run: |

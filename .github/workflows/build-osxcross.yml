@@ -1,0 +1,86 @@
+name: Build reusable osxcross toolchain
+on:
+  workflow_dispatch:
+    inputs:
+      release-tag:
+        description: Versioned release tag (for example osxcross-llvm-ubuntu24-v1)
+        required: true
+        type: string
+      sdk-url:
+        description: HTTPS URL for a legally obtained macOS SDK archive
+        required: false
+        type: string
+      sdk-sha256:
+        description: SHA-256 of the SDK archive
+        required: false
+        type: string
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned toolchain
+        uses: ./setup-osxcross
+        with:
+          sdk-url: ${{ inputs.sdk-url || 'https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz' }}
+          sdk-sha256: ${{ inputs.sdk-sha256 || 'cd4f08a75577145b8f05245a2975f7c81401d75e9535dcffbb879ee1deefcbf4' }}
+      - name: Smoke-test both target compilers
+        shell: bash
+        run: |
+          set -euo pipefail
+          for arch in x86_64 arm64; do
+            compiler="/opt/osxcross/bin/${arch}-apple-${DARWIN_TARGET}-clang"
+            test -x "$compiler"
+            printf 'int main(void) { return 0; }\n' | "$compiler" -x c - -o "$RUNNER_TEMP/test-${arch}"
+            file "$RUNNER_TEMP/test-${arch}"
+            file "$RUNNER_TEMP/test-${arch}" | grep -q 'Mach-O'
+          done
+      - name: Package compiler without Apple SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Never redistribute the Apple SDK from this repository.
+          # Keep the osxcross target tree layout but omit SDK directories.
+          tar -C /opt -czf "$RUNNER_TEMP/osxcross-llvm-ubuntu24-toolchain.tar.gz" \
+            --exclude='osxcross/target/SDK' \
+            --exclude='osxcross/target/SDK/**' \
+            --exclude='osxcross/SDK' \
+            --exclude='osxcross/SDK/**' \
+            --exclude='*.sdk' \
+            --exclude='*.sdk/*' \
+            osxcross
+          if tar -tzf "$RUNNER_TEMP/osxcross-llvm-ubuntu24-toolchain.tar.gz" | grep -E '/[^/]+\\.sdk(/|$)'; then
+            echo '::error::Apple SDK present in artifact'
+            exit 1
+          fi
+          (cd "$RUNNER_TEMP" && sha256sum osxcross-llvm-ubuntu24-toolchain.tar.gz > osxcross-llvm-ubuntu24-toolchain.tar.gz.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osxcross-llvm-ubuntu24-toolchain
+          path: |
+            ${{ runner.temp }}/osxcross-llvm-ubuntu24-toolchain.tar.gz
+            ${{ runner.temp }}/osxcross-llvm-ubuntu24-toolchain.tar.gz.sha256
+          retention-days: 30
+      - name: Publish versioned toolchain release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^osxcross-llvm-ubuntu24-v[0-9]+([.][0-9]+){0,2}$ ]]; then
+            echo '::error::Release tag must look like osxcross-llvm-ubuntu24-v1 or osxcross-llvm-ubuntu24-v1.2.3'
+            exit 1
+          fi
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::Release $RELEASE_TAG already exists; choose a new version instead of overwriting"
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" \
+            "$RUNNER_TEMP/osxcross-llvm-ubuntu24-toolchain.tar.gz" \
+            "$RUNNER_TEMP/osxcross-llvm-ubuntu24-toolchain.tar.gz.sha256" \
+            --title "osxcross Ubuntu 24.04 toolchain $RELEASE_TAG" \
+            --notes "Prebuilt Linux-hosted osxcross compiler/linker for Ubuntu 24.04. Apple macOS SDK is not included and must be supplied separately. Verify the published SHA-256 checksum before use."
