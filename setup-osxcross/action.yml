@@ -26,7 +26,7 @@ runs:
       run: |
         set -euo pipefail
         if ! command -v ld64.lld >/dev/null 2>&1; then
-          linker="$(find /usr/bin /usr/lib/llvm-*/bin -maxdepth 1 -name 'ld64.lld*' -type f -print 2>/dev/null | sort -V | tail -n 1)"
+          linker="$(find /usr/bin /usr/lib/llvm-*/bin -maxdepth 1 -name 'ld64.lld*' -print 2>/dev/null | sort -V | tail -n 1)"
           if [[ -z "$linker" ]]; then
             echo '::error::LLVM lld package installed but no ld64.lld executable found'
             exit 1
