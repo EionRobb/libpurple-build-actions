@@ -1,5 +1,8 @@
 name: Build reusable osxcross toolchain
 on:
+  push:
+    branches:
+      - feature/reusable-osxcross-toolchain
   pull_request:
     paths:
       - '.github/workflows/build-osxcross.yml'
