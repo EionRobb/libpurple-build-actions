@@ -13,6 +13,10 @@ inputs:
     description: Pinned upstream osxcross commit
     required: false
     default: '27d21e4977c9751d01199c7a226a6faf494c3dd9'
+  cache-version:
+    description: Cache namespace for controlled clean-build validation
+    required: false
+    default: 'v2'
 runs:
   using: composite
   steps:
@@ -39,7 +43,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: /opt/osxcross
-        key: osxcross-llvm-ubuntu24-${{ runner.arch }}-${{ inputs.osxcross-commit }}-${{ inputs.sdk-sha256 }}-v2
+        key: osxcross-llvm-ubuntu24-${{ runner.arch }}-${{ inputs.osxcross-commit }}-${{ inputs.sdk-sha256 }}-${{ inputs.cache-version }}
     - name: Build osxcross
       if: steps.toolchain.outputs.cache-hit != 'true'
       shell: bash
