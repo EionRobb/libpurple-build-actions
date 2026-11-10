@@ -20,14 +20,13 @@ runs:
         RELEASE_TAG: ${{ inputs.release-tag }}
         SDK_URL: ${{ inputs.sdk-url }}
         SDK_SHA256: ${{ inputs.sdk-sha256 }}
-        REPOSITORY: ${{ github.action_repository }}
+        REPOSITORY: EionRobb/libpurple-build-actions
       run: |
         set -euo pipefail
         [[ "$(. /etc/os-release; echo "$VERSION_ID")" == "24.04" ]] || { echo "::error::Ubuntu 24.04 required"; exit 1; }
         [[ "$RELEASE_TAG" =~ ^osxcross-llvm-ubuntu24-v[0-9]+(\.[0-9]+){0,2}$ ]] || exit 1
         [[ "$SDK_URL" == https://* ]] || { echo "::error::SDK URL must use HTTPS"; exit 1; }
         [[ "$SDK_SHA256" =~ ^[[:xdigit:]]{64}$ ]] || { echo "::error::Invalid SDK checksum"; exit 1; }
-        [[ -n "$REPOSITORY" ]] || REPOSITORY="EionRobb/libpurple-build-actions"
         tmp="$(mktemp -d)"
         trap 'rm -rf "$tmp"' EXIT
         cd "$tmp"
