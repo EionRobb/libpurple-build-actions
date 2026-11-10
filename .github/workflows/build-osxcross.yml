@@ -35,6 +35,7 @@ jobs:
         with:
           sdk-url: ${{ inputs.sdk-url || 'https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz' }}
           sdk-sha256: ${{ inputs.sdk-sha256 || 'cd4f08a75577145b8f05245a2975f7c81401d75e9535dcffbb879ee1deefcbf4' }}
+          cache-version: 'cold-validation-1'
       - name: Smoke-test both target compilers
         shell: bash
         run: |
