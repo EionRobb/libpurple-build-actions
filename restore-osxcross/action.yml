@@ -1,0 +1,63 @@
+name: Restore released osxcross toolchain
+description: Download a versioned SDK-free osxcross release, verify its SHA-256 and inject a separately supplied SDK
+inputs:
+  release-tag:
+    description: Immutable release tag (for example osxcross-llvm-ubuntu24-v1)
+    required: true
+  sdk-url:
+    description: HTTPS URL of a legally obtained macOS SDK tar.xz archive
+    required: true
+  sdk-sha256:
+    description: SHA-256 of the SDK archive
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Restore verified toolchain and SDK
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ inputs.release-tag }}
+        SDK_URL: ${{ inputs.sdk-url }}
+        SDK_SHA256: ${{ inputs.sdk-sha256 }}
+        REPOSITORY: EionRobb/libpurple-build-actions
+      run: |
+        set -euo pipefail
+        [[ "$(. /etc/os-release; echo "$VERSION_ID")" == "24.04" ]] || { echo "::error::Ubuntu 24.04 required"; exit 1; }
+        [[ "$RELEASE_TAG" =~ ^osxcross-llvm-ubuntu24-v[0-9]+(\.[0-9]+){0,2}$ ]] || exit 1
+        [[ "$SDK_URL" == https://* ]] || { echo "::error::SDK URL must use HTTPS"; exit 1; }
+        [[ "$SDK_SHA256" =~ ^[[:xdigit:]]{64}$ ]] || { echo "::error::Invalid SDK checksum"; exit 1; }
+        tmp="$(mktemp -d)"
+        trap 'rm -rf "$tmp"' EXIT
+        cd "$tmp"
+        gh release download "$RELEASE_TAG" --repo "$REPOSITORY" --pattern 'osxcross-llvm-ubuntu24-toolchain.tar.gz*'
+        sha256sum -c osxcross-llvm-ubuntu24-toolchain.tar.gz.sha256
+        tar -tzf osxcross-llvm-ubuntu24-toolchain.tar.gz | while IFS= read -r entry; do
+          case "$entry" in
+            osxcross/*) ;;
+            *) echo "::error::Unexpected toolchain archive path: $entry"; exit 1 ;;
+          esac
+          case "/$entry" in */../*|*/./*) echo "::error::Unsafe archive path"; exit 1 ;; esac
+        done
+        sudo mkdir -p /opt/osxcross
+        sudo tar -xzf osxcross-llvm-ubuntu24-toolchain.tar.gz -C /opt --no-same-owner
+        curl --fail --location --silent --show-error "$SDK_URL" -o sdk.tar.xz
+        echo "$SDK_SHA256  sdk.tar.xz" | sha256sum -c -
+        mkdir sdk
+        tar -xJf sdk.tar.xz -C sdk
+        mapfile -t sdks < <(find sdk -type d -name '*.sdk')
+        [[ "${#sdks[@]}" -eq 1 ]] || { echo "::error::Expected exactly one SDK directory"; exit 1; }
+        sudo mkdir -p /opt/osxcross/target/SDK
+        sudo cp -a "${sdks[0]}" /opt/osxcross/target/SDK/
+        echo "OSXCROSS=/opt/osxcross" >> "$GITHUB_ENV"
+        echo "/opt/osxcross/bin" >> "$GITHUB_PATH"
+        compiler="$(find /opt/osxcross/bin -maxdepth 1 -name 'x86_64-apple-darwin*-clang' -print -quit)"
+        [[ -n "$compiler" ]] || { echo "::error::Missing compiler"; exit 1; }
+        target="$(basename "$compiler" | sed 's/^x86_64-apple-//;s/-clang$//')"
+        echo "DARWIN_TARGET=$target" >> "$GITHUB_ENV"
+        for arch in x86_64 arm64; do
+          cc="/opt/osxcross/bin/${arch}-apple-${target}-clang"
+          [[ -x "$cc" ]] || exit 1
+          printf 'int main(void) { return 0; }\n' | "$cc" -x c - -o "$tmp/test-$arch"
+          file "$tmp/test-$arch" | grep -q 'Mach-O'
+        done

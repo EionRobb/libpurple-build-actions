@@ -21,4 +21,4 @@ echo "$SDK_SHA256  $source_dir/tarballs/$sdk_name" | sha256sum -c -
 sudo mkdir -p /opt/osxcross
 sudo chown "$USER" /opt/osxcross
 cd "$source_dir"
-UNATTENDED=1 BUILD_FLAVOR=stable TARGET_DIR=/opt/osxcross ENABLE_ARCHS="x86_64 arm64" ./build.sh
+UNATTENDED=1 BUILD_FLAVOR=llvm TARGET_DIR=/opt/osxcross ENABLE_ARCHS="x86_64 arm64" ./build.sh
